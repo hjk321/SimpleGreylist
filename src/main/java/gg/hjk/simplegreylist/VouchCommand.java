@@ -55,8 +55,11 @@ public class VouchCommand implements CommandExecutor {
         if (args.length != 1) {
             return false;
         }
-        OfflinePlayer player = this.plugin.getServer().getOfflinePlayerIfCached(args[0]);
-        if (player == null || !player.hasPlayedBefore()) {
+        OfflinePlayer player = this.plugin.getServer().getPlayerExact(args[0]);
+        if (player == null) {
+            player = this.plugin.getServer().getOfflinePlayerIfCached(args[0]);
+        }
+        if (player == null || (!player.isOnline() && !player.hasPlayedBefore())) {
             sender.sendMessage(MiniMessage.miniMessage().deserialize("<red>Couldn't find a player named " + args[0] + "."));
             return true;
         }
@@ -67,6 +70,7 @@ public class VouchCommand implements CommandExecutor {
 
         final UUID finalId = id;
         final String finalName = name;
+        final OfflinePlayer finalPlayer = player;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             Optional<Group> group = plugin.lp.getGroupManager().loadGroup(unknownPlayerGroupName).join();
             Optional<Track> track = plugin.lp.getTrackManager().loadTrack(trackToUseName).join();
@@ -77,7 +81,7 @@ public class VouchCommand implements CommandExecutor {
                 return;
             }
 
-            User user = plugin.lp.getUserManager().loadUser(player.getUniqueId(), args[0]).join();
+            User user = plugin.lp.getUserManager().loadUser(finalPlayer.getUniqueId(), args[0]).join();
             if (user == null) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     sender.sendMessage(MiniMessage.miniMessage().deserialize("<red>Couldn't find a player named " + args[0] + "."));
@@ -102,7 +106,7 @@ public class VouchCommand implements CommandExecutor {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 plugin.getServer().broadcast(MiniMessage.miniMessage().deserialize("<dark_aqua>" + finalName + " has vouched for " + args[0] + "."));
                 sender.sendMessage(MiniMessage.miniMessage().deserialize("<green>Successfully vouched for " + args[0] + "."));
-                Player onlinePlayer = plugin.getServer().getPlayer(player.getUniqueId());
+                Player onlinePlayer = plugin.getServer().getPlayer(finalPlayer.getUniqueId());
                 if (onlinePlayer != null) {
                     onlinePlayer.sendMessage(MiniMessage.miniMessage().deserialize("<green>" + finalName + " vouched for you. You may now interact with the world."));
                 }
@@ -110,7 +114,7 @@ public class VouchCommand implements CommandExecutor {
 
             plugin.lp.getActionLogger().submit(Action.builder()
                     .source(finalId).sourceName(finalName)
-                    .target(player.getUniqueId()).targetName(args[0]).targetType(Action.Target.Type.USER)
+                    .target(finalPlayer.getUniqueId()).targetName(args[0]).targetType(Action.Target.Type.USER)
                     .timestamp(Instant.now()).description("[SimpleGreylist] vouched for")
                     .build()).join();
         });
